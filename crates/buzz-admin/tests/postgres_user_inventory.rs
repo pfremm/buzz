@@ -31,12 +31,17 @@ async fn cluster_global_inventory_cli_uses_only_existing_membership_tables() {
     .await
     .unwrap();
     // These are existing deployed tables. No entity_deletion_* schema is needed.
+    // `users` supplies owned-agent discovery.
     sqlx::raw_sql(include_str!(
         "../../../schema/tables/public/communities.sql"
     ))
     .execute(&mut *tx)
     .await
     .unwrap();
+    sqlx::raw_sql(include_str!("../../../schema/tables/public/users.sql"))
+        .execute(&mut *tx)
+        .await
+        .unwrap();
     sqlx::raw_sql(include_str!(
         "../../../schema/tables/public/relay_members.sql"
     ))
@@ -173,10 +178,12 @@ async fn cluster_global_inventory_cli_uses_only_existing_membership_tables() {
         .unwrap();
     assert_eq!(participant["label"], "channel-only-cli.example");
     assert_eq!(participant["relationship"], "participant");
-    for output in [&demo, inventory] {
-        for row in output["communities"].as_array().unwrap() {
-            assert_eq!(row.as_object().unwrap().len(), 3);
-        }
+    for row in demo["communities"].as_array().unwrap() {
+        assert_eq!(row.as_object().unwrap().len(), 3);
+    }
+    for row in communities {
+        assert_eq!(row.as_object().unwrap().len(), 4);
+        assert_eq!(row["agents"], serde_json::json!([]));
     }
 }
 
