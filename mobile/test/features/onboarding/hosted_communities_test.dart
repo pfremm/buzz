@@ -49,11 +49,11 @@ void main() {
             overrides: [hostedFlowProvider.overrideWithValue(f.flow)],
           ),
         );
-        await tester.pumpAndSettle();
+        await settle(tester);
         await revealOptionsWithSemantics(tester);
-        await tester.pumpAndSettle();
+        await settle(tester);
         tester.view.physicalSize = const Size(420, 900);
-        await tester.pumpAndSettle();
+        await settle(tester);
         final linkCard = find.ancestor(
           of: find.text('Enter a community link').hitTestable(),
           matching: find.byType(InkWell),
@@ -72,7 +72,7 @@ void main() {
           greaterThanOrEqualTo(24),
         );
         tester.view.physicalSize = const Size(320, 640);
-        await tester.pumpAndSettle();
+        await settle(tester);
         final optionTop = tester
             .getTopLeft(find.text('Enter a community link').hitTestable())
             .dy;
@@ -118,14 +118,14 @@ void main() {
         }
         await tester.pump(const Duration(milliseconds: 50));
         await tester.binding.handlePopRoute();
-        await tester.pumpAndSettle();
+        await settle(tester);
         expect(tester.testTextInput.isVisible, isFalse);
         expect(find.text('Use a pairing code').hitTestable(), findsOneWidget);
         await tester.tap(find.text('Enter a community link').hitTestable());
         await tester.pump();
         // A hardware keyboard produces no software-keyboard notification.
         await tester.pump(const Duration(milliseconds: 350));
-        await tester.pumpAndSettle();
+        await settle(tester);
         expect(
           tester
               .getTopLeft(find.text('Enter a community link').hitTestable())
@@ -134,7 +134,7 @@ void main() {
         );
         expect(tester.testTextInput.isVisible, isTrue);
         tester.view.viewInsets = const FakeViewPadding(bottom: 300);
-        await tester.pumpAndSettle();
+        await settle(tester);
         final field = find.byKey(const Key('community-link-input'));
         await tester.ensureVisible(field);
         expect(field.hitTestable(), findsOneWidget);
@@ -150,11 +150,11 @@ void main() {
         expect(tester.takeException(), isNull);
         tester.view.viewInsets = const FakeViewPadding();
         await tester.binding.handlePopRoute();
-        await tester.pumpAndSettle();
+        await settle(tester);
         expect(tester.testTextInput.isVisible, isFalse);
         expect(find.text('Use pairing code'), findsNothing);
         await tester.tap(find.text('Use a pairing code').hitTestable());
-        await tester.pumpAndSettle();
+        await settle(tester);
         expect(
           find
               .text('Paste the pairing code from your desktop app.')
@@ -162,13 +162,13 @@ void main() {
           findsOneWidget,
         );
         await tester.tap(find.text('Back').hitTestable());
-        await tester.pumpAndSettle();
+        await settle(tester);
         expect(
           find.text('or sign in with email').hitTestable(),
           findsOneWidget,
         );
         await tester.pumpWidget(const SizedBox.shrink());
-        await tester.pumpAndSettle();
+        await settle(tester);
         await f.dispose();
         tester.view.reset();
       }
@@ -379,10 +379,34 @@ Future<void> revealOptionsWithSemantics(WidgetTester tester) async {
       ui.SemanticsAction.customAction,
       actionIds.single,
     );
-    await tester.pumpAndSettle();
+    await settle(tester);
     expect(find.text('Enter a community link').hitTestable(), findsOneWidget);
     expect(find.text('Use a pairing code').hitTestable(), findsOneWidget);
   } finally {
     handle.dispose();
   }
+}
+
+/// Pumps until every transition except the welcome bee swarm has finished.
+///
+/// The swarm animates continuously while the connection landing is visible,
+/// so [WidgetTester.pumpAndSettle] would never observe an idle frame there.
+Future<void> settle(WidgetTester tester) async {
+  for (var frame = 0; frame < 600; frame++) {
+    await tester.pump(const Duration(milliseconds: 16));
+    final swarms = find
+        .byKey(const Key('welcome-bee-flight-area'), skipOffstage: false)
+        .evaluate()
+        .where(
+          (bee) =>
+              !MediaQuery.disableAnimationsOf(bee) &&
+              TickerMode.valuesOf(bee).enabled,
+        )
+        .length;
+    if (tester.binding.transientCallbackCount <= swarms &&
+        (swarms > 0 || !tester.binding.hasScheduledFrame)) {
+      return;
+    }
+  }
+  fail('Transitions beside the welcome swarm did not settle');
 }
